@@ -1,0 +1,39 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Development environment
+.env
+.env.*
+.idea/
+.vscode/
+.rust-analyzer/
+.cargo/
+*.swp
+*.swo
+.DS_Store
+
+# Generated binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Code coverage
+*.profraw
+coverage/
+
+# Documentation
+/doc
+
+# Benchmarks
+/benches/target
+
+# Testing
+/tests/target
+
+# User-specific configurations
+.rustfmt.toml
+.cargo-ok
+rustc-ice-*.txt
