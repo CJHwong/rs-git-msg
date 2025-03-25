@@ -126,6 +126,22 @@ rs-git-msg -p openai -m gpt-3.5-turbo -k your_api_key_here
 rs-git-msg -v
 ```
 
+### Lazygit Integration
+
+You can integrate rs-git-msg with [lazygit](https://github.com/jesseduffield/lazygit) for an even smoother workflow:
+
+1. Run the setup script:
+   ```bash
+   ./scripts/setup-lazygit.sh
+   ```
+
+2. In lazygit, you can now use the `G` key in the files view to generate a commit message automatically.
+
+The command will:
+- Generate a commit message using rs-git-msg
+- Automatically populate the commit message field
+- Use your configured AI provider and settings
+
 ## Environment Variables
 
 - `RS_GIT_MSG_API_KEY`: Set your API key for OpenAI
