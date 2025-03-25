@@ -37,3 +37,6 @@ coverage/
 .rustfmt.toml
 .cargo-ok
 rustc-ice-*.txt
+
+# Tarpaulin
+tarpaulin-report.html

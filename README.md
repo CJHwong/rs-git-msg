@@ -38,17 +38,17 @@ The script will:
 1. Clone the repository
 2. Build with Cargo:
 
-```bash
-cargo build --release
-```
+    ```bash
+    cargo build --release
+    ```
 
 3. Move the built executable to a location in your PATH:
 
-```bash
-cp target/release/rs-git-msg ~/.local/bin/
-# or
-sudo cp target/release/rs-git-msg /usr/local/bin/
-```
+    ```bash
+    cp target/release/rs-git-msg ~/.local/bin/
+    # or
+    sudo cp target/release/rs-git-msg /usr/local/bin/
+    ```
 
 ## Uninstallation
 
@@ -61,6 +61,7 @@ To remove rs-git-msg from your system, you can use the uninstall script:
 ```
 
 This script will:
+
 - Remove the rs-git-msg binary from standard installation locations
 - Clean up any configuration files created during use
 
@@ -93,7 +94,7 @@ rs-git-msg
 
 ### Options
 
-```
+```txt
 Usage: rs-git-msg [OPTIONS]
 
 Options:
@@ -143,6 +144,85 @@ rs-git-msg -v
 2. Generate an API key
 3. Run rs-git-msg with `-p openai -k your_api_key`
 
+## Testing Guide
+
+This project has a comprehensive test suite. Here's how to run and work with the tests:
+
+### Running Tests
+
+To run all tests in the project:
+
+```bash
+cargo test
+```
+
+To run tests with output (including println statements):
+
+```bash
+cargo test -- --nocapture
+```
+
+To run a specific test:
+
+```bash
+cargo test test_name
+```
+
+To run tests in a specific module:
+
+```bash
+cargo test module_name
+```
+
+### Test Coverage
+
+To check test coverage, you can use tools like [cargo-tarpaulin](https://github.com/xd009642/tarpaulin):
+
+```bash
+# Install tarpaulin
+cargo install cargo-tarpaulin
+
+# Generate coverage report
+cargo tarpaulin --out Html
+```
+
+### Mock Provider
+
+For testing without a real AI provider, the project includes a `MockProvider` implementation:
+
+```rust
+use crate::ai::mock::MockProvider;
+
+#[test]
+fn test_with_mock() {
+    // Create a mock provider with a predefined response
+    let mock_provider = MockProvider::new("feat(test): add new feature");
+    
+    // Use the mock provider
+    // ...
+    
+    // Check what prompts were sent to the mock
+    let calls = mock_provider.get_calls();
+    assert_eq!(calls[0], "expected prompt");
+}
+```
+
+### Writing Tests
+
+When adding new features, please follow these guidelines for tests:
+
+1. **Unit Tests**: Place them in the same file as the code they test, within a `mod tests` block
+2. **Mock External Services**: Always use mocks for external services like API calls
+3. **Test Edge Cases**: Include tests for error conditions and edge cases
+4. **Test Public API**: Ensure all public functions and methods have tests
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+When contributing, please:
+
+1. Add tests for any new features
+2. Ensure all tests pass with `cargo test`
+3. Run `cargo fmt` for consistent code formatting
+4. Run `cargo clippy` to catch common issues
