@@ -1,0 +1,16 @@
+[package]
+name = "rs-git-msg"
+version = "0.1.0"
+edition = "2024"
+description = "AI-powered git commit message generator"
+authors = ["Chuan-Jhe Huang <cjhwong@gmail.com>"]
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+git2 = "0.18"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1.28", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+async-trait = "0.1"
