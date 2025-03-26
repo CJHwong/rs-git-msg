@@ -12,8 +12,22 @@ An AI-powered git commit message generator written in Rust.
   - Gemini
 - Customizable with different models and parameters
 - Generate multiple message options
+- Add specific instructions to guide message generation
+- Integrates with [lazygit](https://github.com/jesseduffield/lazygit) for a seamless workflow
 
 ## Installation
+
+### Using pre-built binaries (quickest)
+
+You can download and install pre-built binaries directly from GitHub Releases:
+
+```bash
+# Linux (amd64)
+curl -L https://github.com/CJHwong/rs-git-msg/releases/latest/download/rs-git-msg-linux-amd64 -o /usr/local/bin/rs-git-msg && chmod +x /usr/local/bin/rs-git-msg
+
+# macOS (amd64)
+curl -L https://github.com/CJHwong/rs-git-msg/releases/latest/download/rs-git-msg-macos-amd64 -o /usr/local/bin/rs-git-msg && chmod +x /usr/local/bin/rs-git-msg
+```
 
 ### Using the install script (recommended)
 
@@ -21,7 +35,7 @@ The easiest way to install rs-git-msg is using the provided install script:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/rs-git-msg.git
+git clone https://github.com/CJHwong/rs-git-msg.git
 cd rs-git-msg
 
 # Run the install script
@@ -134,19 +148,52 @@ rs-git-msg -v
 
 You can integrate rs-git-msg with [lazygit](https://github.com/jesseduffield/lazygit) for an even smoother workflow:
 
+![Lazygit Integration Demo](lazygit.gif)
+
 1. Run the setup script:
 
    ```bash
    ./scripts/setup-lazygit.sh
    ```
 
-2. In lazygit, you can now use the `G` key in the files view to generate a commit message automatically.
+2. In lazygit, you can now use the `ctrl + g` (or `cmd + g` on macOS) key in the files view to generate a commit message automatically.
 
 The command will:
 
 - Generate a commit message using rs-git-msg
 - Automatically populate the commit message field
 - Use your configured AI provider and settings
+
+#### Manual lazygit Setup
+
+If you prefer to manually configure lazygit without running the setup script:
+
+1. Locate your lazygit config file:
+   - macOS: `~/Library/Application Support/lazygit/config.yml`
+   - Linux/Others: `~/.config/lazygit/config.yml`
+
+2. Add the following configuration to your `config.yml`:
+
+   ```yaml
+   customCommands:
+     - key: <c-g>
+       prompts:
+         - type: input
+           title: Additional Instructions (optional)
+           key: Instructions
+           initialValue: ""
+         - type: menuFromCommand
+           title: AI Commit Messages
+           key: Msg
+           command: 'rs-git-msg -n 5 {{if .Form.Instructions}}-i "{{.Form.Instructions}}"{{end}}'
+       command: git commit -m "{{.Form.Msg}}"
+       context: 'files'
+       description: 'Generate commit message using rs-git-msg'
+       loadingText: 'Generating commit messages...'
+       stream: false
+   ```
+
+3. Save the file and lazygit should now have the new keybinding.
 
 ## Environment Variables
 
