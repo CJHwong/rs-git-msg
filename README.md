@@ -9,6 +9,7 @@ An AI-powered git commit message generator written in Rust.
 - Supports multiple AI providers:
   - [Ollama](https://ollama.ai/) (local inference)
   - OpenAI API (GPT models)
+  - Gemini
 - Customizable with different models and parameters
 - Generate multiple message options
 
@@ -102,7 +103,7 @@ Options:
   -i, --instructions <INSTRUCTIONS>
                             Additional context or instructions for the AI
   -v, --verbose             Enable verbose output
-  -p, --provider <PROVIDER> AI provider to use [default: ollama] [possible values: ollama, openai]
+  -p, --provider <PROVIDER> AI provider to use [default: ollama] [possible values: ollama, openai, gemini]
   -m, --model <MODEL>       Model name to use [default: qwen2.5-coder]
   -k, --api-key <API_KEY>   API key for the provider (not needed for Ollama)
   -u, --api-url <API_URL>   API base URL (defaults to provider's standard URL)
@@ -122,6 +123,9 @@ rs-git-msg -n 3
 # Using OpenAI's GPT-3.5 Turbo
 rs-git-msg -p openai -m gpt-3.5-turbo -k your_api_key_here
 
+# Using Gemini
+rs-git-msg -p gemini -m gemini-2.0-flash -k your_api_key_here
+
 # Enable verbose output for debugging
 rs-git-msg -v
 ```
@@ -131,6 +135,7 @@ rs-git-msg -v
 You can integrate rs-git-msg with [lazygit](https://github.com/jesseduffield/lazygit) for an even smoother workflow:
 
 1. Run the setup script:
+
    ```bash
    ./scripts/setup-lazygit.sh
    ```
@@ -138,13 +143,14 @@ You can integrate rs-git-msg with [lazygit](https://github.com/jesseduffield/laz
 2. In lazygit, you can now use the `G` key in the files view to generate a commit message automatically.
 
 The command will:
+
 - Generate a commit message using rs-git-msg
 - Automatically populate the commit message field
 - Use your configured AI provider and settings
 
 ## Environment Variables
 
-- `RS_GIT_MSG_API_KEY`: Set your API key for OpenAI
+- `RS_GIT_MSG_API_KEY`: Set your API key for OpenAI or Gemini
 
 ## AI Provider Setup
 
@@ -159,6 +165,27 @@ The command will:
 1. Create an account at [OpenAI](https://platform.openai.com/)
 2. Generate an API key
 3. Run rs-git-msg with `-p openai -k your_api_key`
+
+### Gemini
+
+To use the Gemini provider, you need to:
+
+1. Obtain an API key from [Google AI Studio](https://aistudio.google.com/).
+2. Set the `RS_GIT_MSG_API_KEY` environment variable with your Gemini API key.
+3. Use the `--provider gemini` flag when running `rs-git-msg`.
+
+Example:
+
+```bash
+export RS_GIT_MSG_API_KEY="YOUR_GEMINI_API_KEY"
+rs-git-msg --provider gemini
+```
+
+You can also specify the model and API URL if needed:
+
+```bash
+rs-git-msg --provider gemini --model gemini-2.0-flash --api-url https://generativelanguage.googleapis.com
+```
 
 ## Testing Guide
 

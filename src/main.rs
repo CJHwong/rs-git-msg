@@ -13,6 +13,7 @@ enum Provider {
     Ollama,
     #[value(name = "openai")]
     OpenAI,
+    Gemini,
 }
 
 impl Provider {
@@ -20,6 +21,7 @@ impl Provider {
         match self {
             Provider::Ollama => "qwen2.5-coder",
             Provider::OpenAI => "gpt-4o-mini",
+            Provider::Gemini => "gemini-2.0-flash-lite",
         }
     }
 }
@@ -147,6 +149,7 @@ mod tests {
     fn test_provider_default_model() {
         assert_eq!(Provider::Ollama.default_model(), "qwen2.5-coder");
         assert_eq!(Provider::OpenAI.default_model(), "gpt-4o-mini");
+        assert_eq!(Provider::Gemini.default_model(), "gemini-2.0-flash-lite");
     }
 
     #[test]
@@ -156,6 +159,9 @@ mod tests {
 
         let args = Args::parse_from(["program", "--provider", "openai"]);
         assert_eq!(args.provider, Provider::OpenAI);
+
+        let args = Args::parse_from(["program", "--provider", "gemini"]);
+        assert_eq!(args.provider, Provider::Gemini);
     }
 
     #[test]

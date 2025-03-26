@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 
+pub mod gemini;
 pub mod ollama;
 pub mod openai;
 pub mod provider_factory;
