@@ -187,7 +187,22 @@ You can also specify the model and API URL if needed:
 rs-git-msg --provider gemini --model gemini-2.0-flash --api-url https://generativelanguage.googleapis.com
 ```
 
-## Testing Guide
+## Development Guide
+
+### Git Hooks
+
+This project uses `cargo-husky` to manage Git hooks. When you clone the repository and run any Cargo command, the Git hooks will be automatically set up.
+
+The pre-commit hook will:
+
+1. Format your code with `cargo fmt`
+2. Run tests with `cargo test`
+3. Run linting checks with `cargo clippy`
+4. Verify the code compiles with `cargo check`
+
+If any of these steps fail, the commit will be prevented.
+
+### Testing Guide
 
 This project has a comprehensive test suite. Here's how to run and work with the tests:
 
