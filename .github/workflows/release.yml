@@ -54,8 +54,11 @@ jobs:
         command: build
         args: --release
 
+    - name: Rename binary for upload
+      run: |
+        cp ./target/release/${{ matrix.artifact_name }} ./target/release/${{ matrix.asset_name }}
+
     - name: Upload Release Asset
       uses: softprops/action-gh-release@v1
       with:
-        files: ./target/release/${{ matrix.artifact_name }}
-        name: ${{ matrix.asset_name }}
+        files: ./target/release/${{ matrix.asset_name }}
