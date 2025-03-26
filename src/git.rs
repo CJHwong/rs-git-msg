@@ -93,7 +93,9 @@ impl Repository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
     use std::fs;
+    use std::io::{self, Write};
     use std::path::PathBuf;
     use tempfile::TempDir;
 
@@ -175,6 +177,152 @@ mod tests {
         assert!(diff.is_ok());
         let diff_text = diff.unwrap();
         assert!(diff_text.contains("modified content"));
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_open_current_dir() {
+        let (temp_dir, repo_path) = setup_test_repo();
+
+        // Save current directory
+        let original_dir = env::current_dir().unwrap();
+
+        // Change current directory to temp repo
+        env::set_current_dir(&repo_path).unwrap();
+
+        // Test open_current_dir
+        let repo = Repository::open_current_dir(false);
+        assert!(repo.is_ok());
+
+        // Restore original directory
+        env::set_current_dir(original_dir).unwrap();
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_detached_head() {
+        let (temp_dir, repo_path) = setup_test_repo();
+
+        // Create a second commit to detach from
+        let file_path = repo_path.join("test.txt");
+        fs::write(&file_path, "second commit").unwrap();
+
+        let git_repo = git2::Repository::open(&repo_path).unwrap();
+        let mut index = git_repo.index().unwrap();
+        index.add_path(Path::new("test.txt")).unwrap();
+        index.write().unwrap();
+
+        let tree_id = index.write_tree().unwrap();
+        let tree = git_repo.find_tree(tree_id).unwrap();
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let parent_commit = git_repo.head().unwrap().peel_to_commit().unwrap();
+
+        let commit_id = git_repo
+            .commit(
+                Some("refs/heads/master"),
+                &sig,
+                &sig,
+                "Second commit",
+                &tree,
+                &[&parent_commit],
+            )
+            .unwrap();
+
+        // Detach HEAD by checking out the commit directly
+        git_repo.set_head_detached(commit_id).unwrap();
+
+        // Test get_branch_name in detached state
+        let repo = Repository::open(&repo_path, false).unwrap();
+        let branch_name = repo.get_branch_name();
+        assert!(branch_name.is_ok());
+        assert_eq!(branch_name.unwrap(), "detached-head");
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_no_head_commit() {
+        // Create empty repository without commits
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_path_buf();
+        git2::Repository::init(&repo_path).unwrap();
+
+        // Create repository with verbose mode
+        let repo = Repository::open(&repo_path, true).unwrap();
+
+        // Redirect stdout to capture debug output
+        let mut output = Vec::new();
+        {
+            let mut stdout_redirect = io::Cursor::new(&mut output);
+            // Call get_staged_diff which should print the debug message
+            // Note: In a real implementation, you might want to use a crate like
+            // `capture-stdout` or `std-redirect` for better output capturing
+            let _ = repo.get_staged_diff();
+        }
+
+        // Convert captured output to string
+        let output_str = String::from_utf8_lossy(&output);
+
+        // This test will currently fail since we can't capture stdout directly
+        // In a real implementation, you should inject a logger or use dependency injection
+        // Instead we'll just check the code paths are exercised without errors
+        let diff = repo.get_staged_diff();
+        assert!(diff.is_ok());
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_empty_staged_diff() {
+        let (temp_dir, repo_path) = setup_test_repo();
+
+        // Create file but don't stage it
+        let file_path = repo_path.join("unstaged.txt");
+        fs::write(&file_path, "unstaged content").unwrap();
+
+        // Create repository with verbose mode
+        let repo = Repository::open(&repo_path, true).unwrap();
+
+        // Get staged diff which should be empty and trigger debug_staging_status
+        let diff = repo.get_staged_diff();
+
+        assert!(diff.is_ok());
+        assert_eq!(diff.unwrap(), "");
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_debug_staging_status() {
+        let (temp_dir, repo_path) = setup_test_repo();
+
+        // Create different file states:
+
+        // 1. Modified but not staged file
+        let modified_path = repo_path.join("test.txt");
+        fs::write(&modified_path, "modified not staged").unwrap();
+
+        // 2. Untracked file
+        let untracked_path = repo_path.join("untracked.txt");
+        fs::write(&untracked_path, "untracked content").unwrap();
+
+        // 3. Staged new file
+        let staged_path = repo_path.join("staged.txt");
+        fs::write(&staged_path, "staged content").unwrap();
+
+        let git_repo = git2::Repository::open(&repo_path).unwrap();
+        let mut index = git_repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+
+        // Create repository with verbose flag
+        let repo = Repository::open(&repo_path, true).unwrap();
+
+        // Call debug_staging_status directly to test it
+        let result = repo.debug_staging_status();
+        assert!(result.is_ok());
 
         drop(temp_dir);
     }

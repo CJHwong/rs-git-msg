@@ -16,5 +16,4 @@ anyhow = "1.0"
 async-trait = "0.1"
 
 [dev-dependencies]
-mockito = "1.2"
 tempfile = "3.8"

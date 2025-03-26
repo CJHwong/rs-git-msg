@@ -137,3 +137,84 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn test_provider_default_model() {
+        assert_eq!(Provider::Ollama.default_model(), "qwen2.5-coder");
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn test_provider_parsing() {
+        let args = Args::parse_from(["program", "--provider", "ollama"]);
+        assert_eq!(args.provider, Provider::Ollama);
+
+        let args = Args::parse_from(["program", "--provider", "openai"]);
+        assert_eq!(args.provider, Provider::OpenAI);
+    }
+
+    #[test]
+    fn test_numbers_validation() {
+        // Valid number
+        let args = Args::parse_from(["program", "--number", "3"]);
+        assert_eq!(args.numbers, 3);
+
+        // Default value
+        let args = Args::parse_from(["program"]);
+        assert_eq!(args.numbers, 1);
+    }
+
+    #[test]
+    fn test_model_selection() {
+        // Default model
+        let args = Args::parse_from(["program", "--provider", "ollama"]);
+        let model = args
+            .model
+            .unwrap_or_else(|| args.provider.default_model().to_string());
+        assert_eq!(model, "qwen2.5-coder");
+
+        // Custom model
+        let args = Args::parse_from(["program", "--provider", "ollama", "--model", "llama3"]);
+        let model = args
+            .model
+            .unwrap_or_else(|| args.provider.default_model().to_string());
+        assert_eq!(model, "llama3");
+    }
+
+    #[test]
+    fn test_api_key_handling() {
+        // No API key
+        let args = Args::parse_from(["program"]);
+        assert_eq!(args.api_key, None);
+
+        // With API key
+        let args = Args::parse_from(["program", "--api-key", "test-key"]);
+        assert_eq!(args.api_key, Some("test-key".to_string()));
+    }
+
+    #[test]
+    fn test_verbose_flag() {
+        // Not verbose
+        let args = Args::parse_from(["program"]);
+        assert!(!args.verbose);
+
+        // Verbose short flag
+        let args = Args::parse_from(["program", "-v"]);
+        assert!(args.verbose);
+
+        // Verbose long flag
+        let args = Args::parse_from(["program", "--verbose"]);
+        assert!(args.verbose);
+    }
+
+    #[test]
+    fn test_command_validation() {
+        let cmd = Args::command();
+        cmd.debug_assert();
+    }
+}

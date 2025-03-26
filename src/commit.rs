@@ -65,6 +65,11 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
     }
 
     fn parse_response(&self, response: &str, count: u8) -> Vec<String> {
+        // Return empty vector early if count is 0
+        if count == 0 {
+            return Vec::new();
+        }
+
         // Simple parsing logic - could be enhanced for more complex responses
         let lines: Vec<&str> = response
             .lines()
@@ -99,7 +104,11 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         if messages.is_empty() {
             for line in &lines {
                 if line.contains(':') {
-                    messages.push(line.trim().to_string());
+                    // Also strip number prefixes for single message case
+                    let message = line.trim_start_matches(|c: char| {
+                        c.is_numeric() || c == '.' || c == ' ' || c == ')'
+                    });
+                    messages.push(message.trim().to_string());
                     if messages.len() >= count as usize {
                         break;
                     }
@@ -109,7 +118,10 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
 
         // If still empty, just return the first non-empty line
         if messages.is_empty() && !lines.is_empty() {
-            messages.push(lines[0].to_string());
+            // Also strip number prefixes for fallback case
+            let message = lines[0]
+                .trim_start_matches(|c: char| c.is_numeric() || c == '.' || c == ' ' || c == ')');
+            messages.push(message.trim().to_string());
         }
 
         // Limit to requested count
@@ -308,5 +320,191 @@ mod tests {
         assert!(prompt.contains("Branch name: feature/test"));
         assert!(prompt.contains("Additional context: test instructions"));
         assert!(prompt.contains("test diff"));
+    }
+
+    #[test]
+    fn test_additional_context_formatting() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Test with various additional instructions
+        let with_instruction =
+            generator.build_prompt("diff", "branch", 1, Some("Test instruction"));
+        assert!(with_instruction.contains("Additional context: Test instruction\n\n"));
+
+        // Test with special characters in instructions
+        let with_special_chars =
+            generator.build_prompt("diff", "branch", 1, Some("Test: with! special* chars?"));
+        assert!(with_special_chars.contains("Additional context: Test: with! special* chars?\n\n"));
+
+        // Test with empty string instruction (should still include the header)
+        let with_empty = generator.build_prompt("diff", "branch", 1, Some(""));
+        assert!(with_empty.contains("Additional context: \n\n"));
+    }
+
+    #[test]
+    fn test_message_trimming() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Test with leading/trailing spaces
+        let response = "  feat(core): trimmed message  ";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(core): trimmed message");
+
+        // Test with leading numbers and formatting
+        let response = "1. feat(core): first message\n  2)  feat(ui): second message  ";
+        let messages = generator.parse_response(response, 2);
+        assert_eq!(messages[0], "feat(core): first message");
+        assert_eq!(messages[1], "feat(ui): second message");
+    }
+
+    #[test]
+    fn test_colon_detection() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Test with and without colons
+        let response = "Line without colon\nfeat(core): with colon\nAnother without";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(core): with colon");
+
+        // Test with multiple colon lines
+        let response = "First: has colon\nSecond: also has colon";
+        let messages = generator.parse_response(response, 2);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0], "First: has colon");
+        assert_eq!(messages[1], "Second: also has colon");
+    }
+
+    #[test]
+    fn test_message_truncation() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Test truncation
+        let response =
+            "1. feat(a): first\n2. feat(b): second\n3. feat(c): third\n4. feat(d): fourth";
+
+        // Request fewer than available
+        let messages = generator.parse_response(response, 2);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0], "feat(a): first");
+        assert_eq!(messages[1], "feat(b): second");
+
+        // Request exact number
+        let messages = generator.parse_response(response, 4);
+        assert_eq!(messages.len(), 4);
+
+        // Request more than available
+        let messages = generator.parse_response(response, 6);
+        assert_eq!(messages.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_generate_returns_correct_messages() {
+        // Test with a multi-line response
+        let response =
+            "Here are some messages:\n1. feat(a): first message\n2. fix(b): second message";
+        let mock_provider = MockProvider::new(response);
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        let result = generator.generate("diff", "branch", 2, None).await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], "feat(a): first message");
+        assert_eq!(result[1], "fix(b): second message");
+
+        // Test with a response that has more messages than requested
+        let response = "1. feat(a): first\n2. fix(b): second\n3. docs(c): third";
+        let mock_provider = MockProvider::new(response);
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        let result = generator.generate("diff", "branch", 2, None).await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], "feat(a): first");
+        assert_eq!(result[1], "fix(b): second");
+    }
+
+    #[test]
+    fn test_additional_context_line_specific() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Direct test for the specific line that adds additional context
+        let instructions = "Very specific test";
+        let prompt = generator.build_prompt("diff", "branch", 1, Some(instructions));
+
+        // Verify the exact formatted string that would be created by that line
+        let expected_format = format!("Additional context: {}\n\n", instructions);
+        assert!(prompt.contains(&expected_format));
+    }
+
+    #[test]
+    fn test_message_trim_push_specific() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // This specifically tests the trim and push to string functionality
+        let response = "1.  feat(test): with extra spaces  ";
+        let messages = generator.parse_response(response, 1);
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0], "feat(test): with extra spaces");
+
+        // Test with a single message with number prefix
+        let response = "1.     lots   of    spaces    ";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0], "lots   of    spaces");
+
+        // Test with multiple messages, each with colons to ensure they're parsed correctly
+        let response = "1. first: message\n2. second: message";
+        let messages = generator.parse_response(response, 2);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0], "first: message");
+        assert_eq!(messages[1], "second: message");
+    }
+
+    #[test]
+    fn test_message_truncation_specific() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // This specifically tests the messages.truncate(count as usize) line
+        let response = "1. first: message\n2. second: message\n3. third: message\n4. fourth: message\n5. fifth: message";
+
+        // Test truncation with count > 1 to trigger number stripping logic
+        let messages3 = generator.parse_response(response, 3);
+        assert_eq!(messages3.len(), 3);
+
+        // Test with more messages than available but still gets properly truncated
+        let short_response = "1. one: message\n2. two: message";
+        let many_requested = generator.parse_response(short_response, 5);
+        assert_eq!(many_requested.len(), 2);
+
+        // Test with count of 0 (edge case)
+        let messages0 = generator.parse_response(response, 0);
+        assert_eq!(messages0.len(), 0);
+    }
+
+    #[test]
+    fn test_return_messages_line118() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // This specifically tests the final return of messages
+        let empty_response = "";
+        let empty_messages = generator.parse_response(empty_response, 1);
+        assert!(empty_messages.is_empty());
+
+        // Test a valid response but with count=0
+        let valid_response = "feat: something";
+        let zero_messages = generator.parse_response(valid_response, 0);
+        assert!(zero_messages.is_empty());
+
+        // Test direct return of constructed messages
+        let simple_response = "feat: direct test";
+        let messages = generator.parse_response(simple_response, 1);
+        assert_eq!(messages, vec!["feat: direct test".to_string()]);
     }
 }
