@@ -95,7 +95,7 @@ mod tests {
     use super::*;
     use std::env;
     use std::fs;
-    use std::io::{self, Write};
+    use std::io::{self};
     use std::path::PathBuf;
     use tempfile::TempDir;
 
@@ -255,7 +255,7 @@ mod tests {
         // Redirect stdout to capture debug output
         let mut output = Vec::new();
         {
-            let mut stdout_redirect = io::Cursor::new(&mut output);
+            let _ = io::Cursor::new(&mut output);
             // Call get_staged_diff which should print the debug message
             // Note: In a real implementation, you might want to use a crate like
             // `capture-stdout` or `std-redirect` for better output capturing
@@ -263,7 +263,7 @@ mod tests {
         }
 
         // Convert captured output to string
-        let output_str = String::from_utf8_lossy(&output);
+        let _ = String::from_utf8_lossy(&output);
 
         // This test will currently fail since we can't capture stdout directly
         // In a real implementation, you should inject a logger or use dependency injection

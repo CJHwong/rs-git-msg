@@ -95,7 +95,7 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
                     let message = line.trim_start_matches(|c: char| {
                         c.is_numeric() || c == '.' || c == ' ' || c == ')'
                     });
-                    messages.push(message.trim().to_string());
+                    messages.push(self.strip_redundant_symbols(message.trim()));
                 }
             }
         }
@@ -108,7 +108,7 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
                     let message = line.trim_start_matches(|c: char| {
                         c.is_numeric() || c == '.' || c == ' ' || c == ')'
                     });
-                    messages.push(message.trim().to_string());
+                    messages.push(self.strip_redundant_symbols(message.trim()));
                     if messages.len() >= count as usize {
                         break;
                     }
@@ -121,13 +121,22 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
             // Also strip number prefixes for fallback case
             let message = lines[0]
                 .trim_start_matches(|c: char| c.is_numeric() || c == '.' || c == ' ' || c == ')');
-            messages.push(message.trim().to_string());
+            messages.push(self.strip_redundant_symbols(message.trim()));
         }
 
         // Limit to requested count
         messages.truncate(count as usize);
 
         messages
+    }
+
+    fn strip_redundant_symbols(&self, message: &str) -> String {
+        // Strip common quote characters and backticks from entire message
+        let stripped = message
+            .trim_start_matches(['"', '\'', '`'])
+            .trim_end_matches(['"', '\'', '`']);
+
+        stripped.to_string()
     }
 }
 
@@ -506,5 +515,40 @@ mod tests {
         let simple_response = "feat: direct test";
         let messages = generator.parse_response(simple_response, 1);
         assert_eq!(messages, vec!["feat: direct test".to_string()]);
+    }
+
+    #[test]
+    fn test_strip_redundant_symbols() {
+        let mock_provider = MockProvider::new("test");
+        let generator = CommitMessageGenerator::new(mock_provider);
+
+        // Test with various quote formats
+        let response = "\"feat(core): quoted message\"";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(core): quoted message");
+
+        let response = "'feat(core): single quoted'";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(core): single quoted");
+
+        let response = "`feat(core): with backticks`";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(core): with backticks");
+
+        // Test with mixed formats
+        let response = "1. \"feat(ui): first message\"\n2. 'fix(api): second message'";
+        let messages = generator.parse_response(response, 2);
+        assert_eq!(messages[0], "feat(ui): first message");
+        assert_eq!(messages[1], "fix(api): second message");
+
+        // Test with unbalanced quotes (should still strip properly)
+        let response = "\"feat(db): unbalanced quote";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(db): unbalanced quote");
+
+        // Test with quotes inside message (should preserve them)
+        let response = "feat(text): message with \"quotes\" inside";
+        let messages = generator.parse_response(response, 1);
+        assert_eq!(messages[0], "feat(text): message with \"quotes\" inside");
     }
 }
