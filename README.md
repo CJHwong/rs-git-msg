@@ -4,16 +4,14 @@ An AI-powered git commit message generator written in Rust.
 
 ## Features
 
-- Automatically generates commit messages based on staged changes in your repository
-- Follows the [Conventional Commits](https://www.conventionalcommits.org/) format
-- Supports multiple AI providers:
-  - [Ollama](https://ollama.ai/) (local inference)
-  - OpenAI API (GPT models)
-  - Gemini
-- Customizable with different models and parameters
-- Generate multiple message options
-- Add specific instructions to guide message generation
-- Integrates with [lazygit](https://github.com/jesseduffield/lazygit) for a seamless workflow
+- **AI-powered Commit Message Generation**: Generate high-quality commit messages using AI providers like OpenAI, Gemini, and Ollama. Easily switch between providers or use mock AI for testing.
+- **Git Integration**: Seamlessly integrates with git workflows, supporting commit message generation, hooks, and more.
+- **Easy Installation & Uninstallation**: Simple scripts (`install.sh`, `uninstall.sh`) for quick setup and removal.
+- **Lazygit Demo**: Visual demonstration of usage with LazyGit (`lazygit.gif`).
+- **Provider Factory Architecture**: Easily extend or swap AI providers using a modular provider factory system.
+- **Mock & Test Support**: Includes mock implementations for testing and development without real API calls.
+- **Coverage Reporting**: Integrated with tarpaulin for code coverage reports (`tarpaulin-report.html`).
+- **Cross-platform Support**: Designed to work on macOS and other Unix-like systems.
 
 ## Installation
 
@@ -118,9 +116,10 @@ Options:
                             Additional context or instructions for the AI
   -v, --verbose             Enable verbose output
   -p, --provider <PROVIDER> AI provider to use [default: ollama] [possible values: ollama, openai, gemini]
-  -m, --model <MODEL>       Model name to use [default: qwen2.5-coder]
+  -m, --model <MODEL>       Model name to use (defaults to provider's default)
   -k, --api-key <API_KEY>   API key for the provider (not needed for Ollama)
   -u, --api-url <API_URL>   API base URL (defaults to provider's standard URL)
+      --diff-alg <DIFF_ALG> Diff algorithm to use [default: default] [possible values: default, patience, minimal, difftastic]
   -h, --help                Print help
   -V, --version             Print version
 ```
