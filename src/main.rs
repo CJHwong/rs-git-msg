@@ -26,6 +26,25 @@ impl Provider {
     }
 }
 
+#[derive(Copy, Clone, Debug, ValueEnum, PartialEq)]
+enum DiffAlgArg {
+    Default,
+    Patience,
+    Minimal,
+    Difftastic,
+}
+
+impl From<DiffAlgArg> for git::DiffAlg {
+    fn from(arg: DiffAlgArg) -> Self {
+        match arg {
+            DiffAlgArg::Default => git::DiffAlg::Default,
+            DiffAlgArg::Patience => git::DiffAlg::Patience,
+            DiffAlgArg::Minimal => git::DiffAlg::Minimal,
+            DiffAlgArg::Difftastic => git::DiffAlg::Difftastic,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -56,6 +75,10 @@ struct Args {
     /// API base URL (defaults to provider's standard URL)
     #[arg(short = 'u', long)]
     api_url: Option<String>,
+
+    /// Diff algorithm to use (default, patience, minimal, difftastic)
+    #[arg(long, value_enum, default_value_t = DiffAlgArg::Default)]
+    diff_alg: DiffAlgArg,
 }
 
 #[tokio::main]
@@ -92,8 +115,9 @@ async fn main() -> Result<()> {
         println!("Reading staged changes...");
     }
 
+    let diff_alg = args.diff_alg.into();
     let diff = repo
-        .get_staged_diff()
+        .get_staged_diff(diff_alg)
         .context("Failed to get staged diff")?;
 
     if diff.is_empty() {

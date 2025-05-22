@@ -1,6 +1,15 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use git2::{DiffOptions, Repository as Git2Repo, Status, StatusOptions};
 use std::path::Path;
+use std::process::Command;
+
+pub enum DiffAlg {
+    Default,
+    Patience,
+    Minimal,
+    Difftastic,
+    // Add more as needed
+}
 
 pub struct Repository {
     repo: Git2Repo,
@@ -29,33 +38,134 @@ impl Repository {
         }
     }
 
-    pub fn get_staged_diff(&self) -> Result<String> {
-        let head = self.repo.head().ok();
-        let tree = head.as_ref().and_then(|h| h.peel_to_tree().ok());
-
-        if self.verbose && head.is_none() {
-            println!("Debug: Repository has no HEAD commit yet");
-        }
-
-        let mut options = DiffOptions::new();
-        let diff = self
-            .repo
-            .diff_tree_to_index(tree.as_ref(), None, Some(&mut options))?;
-
-        let mut diff_text = String::new();
-
-        diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
-            if let Ok(content) = std::str::from_utf8(line.content()) {
-                diff_text.push_str(content);
+    pub fn get_staged_diff(&self, alg: DiffAlg) -> Result<String> {
+        match alg {
+            DiffAlg::Difftastic => {
+                // Check if difftastic is available
+                if Command::new("which")
+                    .arg("difft")
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+                {
+                    // Collect staged files
+                    let mut status_opts = StatusOptions::new();
+                    status_opts.include_untracked(false).include_ignored(false);
+                    let statuses = self.repo.statuses(Some(&mut status_opts))?;
+                    let mut diffs = Vec::new();
+                    for entry in statuses.iter() {
+                        let status = entry.status();
+                        if status.intersects(
+                            Status::INDEX_NEW | Status::INDEX_MODIFIED | Status::INDEX_DELETED,
+                        ) {
+                            let path = entry.path().unwrap();
+                            // Get blob for HEAD (if exists)
+                            let head = self.repo.head().ok();
+                            let tree = head.as_ref().and_then(|h| h.peel_to_tree().ok());
+                            let head_blob = tree
+                                .as_ref()
+                                .and_then(|t| t.get_path(Path::new(path)).ok())
+                                .and_then(|e| e.to_object(&self.repo).ok())
+                                .and_then(|o| o.as_blob().map(|b| b.content().to_vec()));
+                            // Get blob for index (staged)
+                            let index = self.repo.index()?;
+                            let staged_entry = index.get_path(Path::new(path), 0);
+                            let staged_blob = if let Some(e) = staged_entry {
+                                self.repo.find_blob(e.id).ok().map(|b| b.content().to_vec())
+                            } else {
+                                None
+                            };
+                            // Write both to temp files
+                            let a_file = tempfile::NamedTempFile::new()?;
+                            let b_file = tempfile::NamedTempFile::new()?;
+                            if let Some(ref content) = head_blob {
+                                std::fs::write(a_file.path(), content)?;
+                            }
+                            if let Some(ref content) = staged_blob {
+                                std::fs::write(b_file.path(), content)?;
+                            }
+                            // Call difft
+                            let output = Command::new("difft")
+                                .arg(a_file.path())
+                                .arg(b_file.path())
+                                .current_dir(self.repo.path().parent().unwrap())
+                                .output();
+                            match output {
+                                Ok(output) => {
+                                    if output.status.success() {
+                                        let diff =
+                                            String::from_utf8_lossy(&output.stdout).to_string();
+                                        if !diff.trim().is_empty() {
+                                            diffs.push(format!(
+                                                "diff --difftastic a/{0} b/{0}\n{1}",
+                                                path, diff
+                                            ));
+                                        }
+                                    } else {
+                                        bail!(
+                                            "difftastic failed: {}",
+                                            String::from_utf8_lossy(&output.stderr)
+                                        );
+                                    }
+                                }
+                                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                                    bail!(
+                                        "difftastic (difft) not found in PATH when running difft. Please install difftastic (https://difftastic.wilfred.me.uk/) and ensure 'difft' is available in your PATH."
+                                    );
+                                }
+                                Err(e) => {
+                                    bail!("Failed to run difft: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    Ok(diffs.join("\n"))
+                } else {
+                    bail!(
+                        "difftastic (difft) not found in PATH. Please install difftastic (https://difftastic.wilfred.me.uk/) and ensure 'difft' is available in your PATH."
+                    );
+                }
             }
-            true
-        })?;
+            _ => {
+                // Built-in algorithms
+                let head = self.repo.head().ok();
+                let tree = head.as_ref().and_then(|h| h.peel_to_tree().ok());
 
-        if diff_text.is_empty() && self.verbose {
-            self.debug_staging_status()?;
+                if self.verbose && head.is_none() {
+                    println!("Debug: Repository has no HEAD commit yet");
+                }
+
+                let mut options = DiffOptions::new();
+                match alg {
+                    DiffAlg::Patience => {
+                        options.patience(true);
+                    }
+                    DiffAlg::Minimal => {
+                        options.minimal(true);
+                    }
+                    _ => {}
+                }
+
+                let diff = self
+                    .repo
+                    .diff_tree_to_index(tree.as_ref(), None, Some(&mut options))?;
+
+                let mut diff_text = String::new();
+
+                diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+                    if let Ok(content) = std::str::from_utf8(line.content()) {
+                        diff_text.push_str(content);
+                    }
+                    true
+                })?;
+
+                if diff_text.is_empty() && self.verbose {
+                    self.debug_staging_status()?;
+                }
+
+                Ok(diff_text)
+            }
         }
-
-        Ok(diff_text)
     }
 
     pub fn get_last_commit_titles(&self, n: usize) -> Result<Vec<String>> {
@@ -186,7 +296,7 @@ mod tests {
         index.write().unwrap();
 
         let repo = Repository::open(&repo_path, false).unwrap();
-        let diff = repo.get_staged_diff();
+        let diff = repo.get_staged_diff(DiffAlg::Default);
 
         assert!(diff.is_ok());
         let diff_text = diff.unwrap();
@@ -273,7 +383,7 @@ mod tests {
             // Call get_staged_diff which should print the debug message
             // Note: In a real implementation, you might want to use a crate like
             // `capture-stdout` or `std-redirect` for better output capturing
-            let _ = repo.get_staged_diff();
+            let _ = repo.get_staged_diff(DiffAlg::Default);
         }
 
         // Convert captured output to string
@@ -282,7 +392,7 @@ mod tests {
         // This test will currently fail since we can't capture stdout directly
         // In a real implementation, you should inject a logger or use dependency injection
         // Instead we'll just check the code paths are exercised without errors
-        let diff = repo.get_staged_diff();
+        let diff = repo.get_staged_diff(DiffAlg::Default);
         assert!(diff.is_ok());
 
         drop(temp_dir);
@@ -300,7 +410,7 @@ mod tests {
         let repo = Repository::open(&repo_path, true).unwrap();
 
         // Get staged diff which should be empty and trigger debug_staging_status
-        let diff = repo.get_staged_diff();
+        let diff = repo.get_staged_diff(DiffAlg::Default);
 
         assert!(diff.is_ok());
         assert_eq!(diff.unwrap(), "");
