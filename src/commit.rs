@@ -17,11 +17,24 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         branch_name: &str,
         count: u8,
         additional_instructions: Option<&str>,
+        last_commit_titles: &[String], // <-- new parameter
+        verbose: bool,                 // <-- new parameter
     ) -> Result<Vec<String>> {
-        let prompt = self.build_prompt(diff, branch_name, count, additional_instructions);
-        let response = self.ai_provider.generate_text(&prompt).await?;
+        let prompt = self.build_prompt(
+            diff,
+            branch_name,
+            count,
+            additional_instructions,
+            last_commit_titles,
+        );
 
-        // Parse the response into individual commit messages
+        if verbose {
+            println!(
+                "--- Prompt sent to AI provider ---\n{prompt}\n-------------------------------"
+            );
+        }
+
+        let response = self.ai_provider.generate_text(&prompt).await?;
         let messages = self.parse_response(&response, count);
         Ok(messages)
     }
@@ -32,11 +45,10 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         branch_name: &str,
         count: u8,
         additional_instructions: Option<&str>,
+        last_commit_titles: &[String], // <-- new parameter
     ) -> String {
-        let mut prompt = format!(
-            "Generate {} commit message(s) for the following changes.\n\n",
-            count
-        );
+        let mut prompt =
+            format!("Generate {count} commit message(s) for the following changes.\n\n");
 
         prompt.push_str("Follow the Conventional Commits specification (https://www.conventionalcommits.org/):\n");
         prompt.push_str("- Format: type(scope): subject\n");
@@ -46,10 +58,21 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         prompt.push_str("- Keep the subject concise (under 72 characters)\n");
         prompt.push_str("- Use imperative mood (\"add\" not \"added\")\n\n");
 
-        prompt.push_str(&format!("Branch name: {}\n\n", branch_name));
+        prompt.push_str(&format!("Branch name: {branch_name}\n\n"));
+
+        // Add last commit titles as real-world examples
+        if !last_commit_titles.is_empty() {
+            prompt.push_str(
+                "Here are the last few commit messages from this repository as examples:\n",
+            );
+            for title in last_commit_titles {
+                prompt.push_str(&format!("- {}\n", title));
+            }
+            prompt.push('\n');
+        }
 
         if let Some(instructions) = additional_instructions {
-            prompt.push_str(&format!("Additional context: {}\n\n", instructions));
+            prompt.push_str(&format!("Additional context: {instructions}\n\n"));
         }
 
         prompt.push_str("Diff:\n```\n");
@@ -57,8 +80,7 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         prompt.push_str("\n```\n\n");
 
         prompt.push_str(&format!(
-            "Provide exactly {} commit message(s) in the format 'type(scope): subject', numbered if more than one.",
-            count
+            "Provide exactly {count} commit message(s) in the format 'type(scope): subject', numbered if more than one."
         ));
 
         prompt
@@ -155,7 +177,7 @@ mod tests {
         let count = 2;
         let instructions = Some("Focus on security improvements");
 
-        let prompt = generator.build_prompt(diff, branch_name, count, instructions);
+        let prompt = generator.build_prompt(diff, branch_name, count, instructions, &[]);
 
         // Check that all required components are in the prompt
         assert!(prompt.contains("Generate 2 commit message(s)"));
@@ -170,7 +192,7 @@ mod tests {
         let mock_provider = MockProvider::new("test");
         let generator = CommitMessageGenerator::new(mock_provider);
 
-        let prompt = generator.build_prompt("some diff", "main", 1, None);
+        let prompt = generator.build_prompt("some diff", "main", 1, None, &[]);
 
         // Check prompt structure is correct
         assert!(prompt.contains("Generate 1 commit message"));
@@ -274,7 +296,9 @@ mod tests {
         let mock_provider = MockProvider::new("feat(test): add new feature");
         let generator = CommitMessageGenerator::new(mock_provider);
 
-        let result = generator.generate("test diff", "main", 1, None).await;
+        let result = generator
+            .generate("test diff", "main", 1, None, &[], false)
+            .await;
 
         assert!(result.is_ok());
         let messages = result.unwrap();
@@ -287,7 +311,9 @@ mod tests {
         let mock_provider = MockProvider::new_with_error("provider error");
         let generator = CommitMessageGenerator::new(mock_provider);
 
-        let result = generator.generate("test diff", "main", 1, None).await;
+        let result = generator
+            .generate("test diff", "main", 1, None, &[], false)
+            .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "provider error");
@@ -301,7 +327,14 @@ mod tests {
         let generator = CommitMessageGenerator::new(mock_provider);
 
         let result = generator
-            .generate("test diff", "feature/auth", 2, Some("New auth system"))
+            .generate(
+                "test diff",
+                "feature/auth",
+                2,
+                Some("New auth system"),
+                &[],
+                false,
+            )
             .await;
 
         assert!(result.is_ok());
@@ -318,7 +351,14 @@ mod tests {
         let generator = CommitMessageGenerator::new(mock_provider);
 
         let _ = generator
-            .generate("test diff", "feature/test", 3, Some("test instructions"))
+            .generate(
+                "test diff",
+                "feature/test",
+                3,
+                Some("test instructions"),
+                &[],
+                false,
+            )
             .await;
 
         let calls = provider_calls.lock().unwrap();
@@ -338,16 +378,21 @@ mod tests {
 
         // Test with various additional instructions
         let with_instruction =
-            generator.build_prompt("diff", "branch", 1, Some("Test instruction"));
+            generator.build_prompt("diff", "branch", 1, Some("Test instruction"), &[]);
         assert!(with_instruction.contains("Additional context: Test instruction\n\n"));
 
         // Test with special characters in instructions
-        let with_special_chars =
-            generator.build_prompt("diff", "branch", 1, Some("Test: with! special* chars?"));
+        let with_special_chars = generator.build_prompt(
+            "diff",
+            "branch",
+            1,
+            Some("Test: with! special* chars?"),
+            &[],
+        );
         assert!(with_special_chars.contains("Additional context: Test: with! special* chars?\n\n"));
 
         // Test with empty string instruction (should still include the header)
-        let with_empty = generator.build_prompt("diff", "branch", 1, Some(""));
+        let with_empty = generator.build_prompt("diff", "branch", 1, Some(""), &[]);
         assert!(with_empty.contains("Additional context: \n\n"));
     }
 
@@ -418,7 +463,10 @@ mod tests {
         let mock_provider = MockProvider::new(response);
         let generator = CommitMessageGenerator::new(mock_provider);
 
-        let result = generator.generate("diff", "branch", 2, None).await.unwrap();
+        let result = generator
+            .generate("diff", "branch", 2, None, &[], false)
+            .await
+            .unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], "feat(a): first message");
         assert_eq!(result[1], "fix(b): second message");
@@ -428,7 +476,10 @@ mod tests {
         let mock_provider = MockProvider::new(response);
         let generator = CommitMessageGenerator::new(mock_provider);
 
-        let result = generator.generate("diff", "branch", 2, None).await.unwrap();
+        let result = generator
+            .generate("diff", "branch", 2, None, &[], false)
+            .await
+            .unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], "feat(a): first");
         assert_eq!(result[1], "fix(b): second");
@@ -441,7 +492,7 @@ mod tests {
 
         // Direct test for the specific line that adds additional context
         let instructions = "Very specific test";
-        let prompt = generator.build_prompt("diff", "branch", 1, Some(instructions));
+        let prompt = generator.build_prompt("diff", "branch", 1, Some(instructions), &[]);
 
         // Verify the exact formatted string that would be created by that line
         let expected_format = format!("Additional context: {}\n\n", instructions);
@@ -456,7 +507,6 @@ mod tests {
         // This specifically tests the trim and push to string functionality
         let response = "1.  feat(test): with extra spaces  ";
         let messages = generator.parse_response(response, 1);
-
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0], "feat(test): with extra spaces");
 

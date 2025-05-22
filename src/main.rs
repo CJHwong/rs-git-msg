@@ -117,6 +117,8 @@ async fn main() -> Result<()> {
         args.verbose,
     )?;
 
+    let last_commit_titles = repo.get_last_commit_titles(3).unwrap_or_default();
+
     let generator = commit::CommitMessageGenerator::new(ai_provider);
 
     if args.verbose {
@@ -129,6 +131,8 @@ async fn main() -> Result<()> {
             &branch_name,
             args.numbers,
             args.instructions.as_deref(),
+            &last_commit_titles,
+            args.verbose,
         )
         .await
         .context("Failed to generate commit message")?;

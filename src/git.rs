@@ -31,7 +31,6 @@ impl Repository {
 
     pub fn get_staged_diff(&self) -> Result<String> {
         let head = self.repo.head().ok();
-        // Use as_ref() to borrow the Option's contents rather than taking ownership
         let tree = head.as_ref().and_then(|h| h.peel_to_tree().ok());
 
         if self.verbose && head.is_none() {
@@ -44,11 +43,10 @@ impl Repository {
             .diff_tree_to_index(tree.as_ref(), None, Some(&mut options))?;
 
         let mut diff_text = String::new();
-        diff.print(git2::DiffFormat::Patch, |_, _, line| {
-            if matches!(line.origin(), 'H' | '+' | '-') {
-                if let Ok(content) = std::str::from_utf8(line.content()) {
-                    diff_text.push_str(content);
-                }
+
+        diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+            if let Ok(content) = std::str::from_utf8(line.content()) {
+                diff_text.push_str(content);
             }
             true
         })?;
@@ -58,6 +56,22 @@ impl Repository {
         }
 
         Ok(diff_text)
+    }
+
+    pub fn get_last_commit_titles(&self, n: usize) -> Result<Vec<String>> {
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.push_head()?;
+        let mut titles = Vec::new();
+
+        for oid_result in revwalk.take(n) {
+            let oid = oid_result?;
+            let commit = self.repo.find_commit(oid)?;
+            let message = commit.summary().unwrap_or("").trim().to_string();
+            if !message.is_empty() {
+                titles.push(message);
+            }
+        }
+        Ok(titles)
     }
 
     fn debug_staging_status(&self) -> Result<()> {
@@ -323,6 +337,61 @@ mod tests {
         // Call debug_staging_status directly to test it
         let result = repo.debug_staging_status();
         assert!(result.is_ok());
+
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_get_last_commit_titles_returns_latest_titles() {
+        let (temp_dir, repo_path) = setup_test_repo();
+        let repo = Repository::open(&repo_path, false).unwrap();
+
+        // Add two more commits
+        let file_path = repo_path.join("test.txt");
+        fs::write(&file_path, "second commit").unwrap();
+        let git_repo = git2::Repository::open(&repo_path).unwrap();
+        let mut index = git_repo.index().unwrap();
+        index.add_path(Path::new("test.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = git_repo.find_tree(tree_id).unwrap();
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let parent_commit = git_repo.head().unwrap().peel_to_commit().unwrap();
+        git_repo
+            .commit(
+                Some("refs/heads/master"),
+                &sig,
+                &sig,
+                "Second commit",
+                &tree,
+                &[&parent_commit],
+            )
+            .unwrap();
+
+        fs::write(&file_path, "third commit").unwrap();
+        let mut index = git_repo.index().unwrap();
+        index.add_path(Path::new("test.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = git_repo.find_tree(tree_id).unwrap();
+        let parent_commit = git_repo.head().unwrap().peel_to_commit().unwrap();
+        git_repo
+            .commit(
+                Some("refs/heads/master"),
+                &sig,
+                &sig,
+                "Third commit",
+                &tree,
+                &[&parent_commit],
+            )
+            .unwrap();
+
+        // Now test get_last_commit_titles
+        let titles = repo.get_last_commit_titles(3).unwrap();
+        assert_eq!(titles.len(), 3);
+        assert_eq!(titles[0], "Third commit");
+        assert_eq!(titles[1], "Second commit");
+        assert_eq!(titles[2], "Initial commit");
 
         drop(temp_dir);
     }
