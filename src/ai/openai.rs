@@ -74,7 +74,7 @@ impl AiProvider for OpenAIProvider {
             .send()
             .await
             .map_err(|e| {
-                eprintln!("Failed to connect to OpenAI API: {}", e);
+                eprintln!("Failed to connect to OpenAI API: {e}");
                 anyhow!("Connection to OpenAI failed: {}", e)
             })?;
 
@@ -84,7 +84,7 @@ impl AiProvider for OpenAIProvider {
 
         let text = response.text().await?;
         if self.verbose {
-            println!("Raw response: {}", text);
+            println!("Raw response: {text}");
         }
 
         let json: Value = serde_json::from_str(&text)?;

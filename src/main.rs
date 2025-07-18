@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
         .context("Failed to get branch name")?;
 
     if args.verbose {
-        println!("Current branch: {}", branch_name);
+        println!("Current branch: {branch_name}");
         println!("Reading staged changes...");
     }
 
@@ -162,7 +162,7 @@ async fn main() -> Result<()> {
         .context("Failed to generate commit message")?;
 
     for message in &messages {
-        println!("{}", message);
+        println!("{message}");
     }
 
     Ok(())

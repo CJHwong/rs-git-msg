@@ -52,7 +52,7 @@ impl AiProvider for OllamaProvider {
             .send()
             .await
             .map_err(|e| {
-                eprintln!("Failed to connect to Ollama server: {}", e);
+                eprintln!("Failed to connect to Ollama server: {e}");
                 eprintln!("Make sure Ollama is running on {}", self.base_url);
                 anyhow!("Connection to Ollama failed: {}", e)
             })?;
@@ -63,7 +63,7 @@ impl AiProvider for OllamaProvider {
 
         let text = response.text().await?;
         if self.verbose {
-            println!("Raw response: {}", text);
+            println!("Raw response: {text}");
         }
 
         let json: Value = serde_json::from_str(&text)?;

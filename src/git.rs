@@ -97,8 +97,7 @@ impl Repository {
                                             String::from_utf8_lossy(&output.stdout).to_string();
                                         if !diff.trim().is_empty() {
                                             diffs.push(format!(
-                                                "diff --difftastic a/{0} b/{0}\n{1}",
-                                                path, diff
+                                                "diff --difftastic a/{path} b/{path}\n{diff}"
                                             ));
                                         }
                                     } else {
@@ -204,10 +203,7 @@ impl Repository {
                 .intersects(Status::INDEX_NEW | Status::INDEX_MODIFIED | Status::INDEX_DELETED);
             let path = String::from_utf8_lossy(entry.path_bytes());
 
-            println!(
-                "Debug: {} - staged: {}, status: {:?}",
-                path, is_staged, status
-            );
+            println!("Debug: {path} - staged: {is_staged}, status: {status:?}");
         }
 
         Ok(())

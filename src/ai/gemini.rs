@@ -69,7 +69,7 @@ impl AiProvider for GeminiProvider {
             .send()
             .await
             .map_err(|e| {
-                eprintln!("Failed to connect to Gemini API: {}", e);
+                eprintln!("Failed to connect to Gemini API: {e}");
                 anyhow!("Connection to Gemini failed: {}", e)
             })?;
 
@@ -79,7 +79,7 @@ impl AiProvider for GeminiProvider {
 
         let text = response.text().await?;
         if self.verbose {
-            println!("Raw response: {}", text);
+            println!("Raw response: {text}");
         }
 
         let json: Value = serde_json::from_str(&text)?;
