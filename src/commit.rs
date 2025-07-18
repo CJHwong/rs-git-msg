@@ -47,8 +47,9 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         additional_instructions: Option<&str>,
         last_commit_titles: &[String], // <-- new parameter
     ) -> String {
-        let mut prompt =
-            format!("Generate {count} commit message(s) for the following changes.\n\n");
+        let mut prompt = format!(
+            "Generate {count} alternative commit message(s) for the following changes. Each message should describe the same change, but use a different tone, style, or wording. Do not split the changes into separate messages.\n\n"
+        );
 
         prompt.push_str("Follow the Conventional Commits specification (https://www.conventionalcommits.org/):\n");
         prompt.push_str("- Format: type(scope): subject\n");
@@ -66,7 +67,7 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
                 "Here are the last few commit messages from this repository as examples:\n",
             );
             for title in last_commit_titles {
-                prompt.push_str(&format!("- {}\n", title));
+                prompt.push_str(&format!("- {title}\n"));
             }
             prompt.push('\n');
         }
@@ -80,7 +81,7 @@ impl<T: AiProvider> CommitMessageGenerator<T> {
         prompt.push_str("\n```\n\n");
 
         prompt.push_str(&format!(
-            "Provide exactly {count} commit message(s) in the format 'type(scope): subject', numbered if more than one."
+            "Provide exactly {count} alternative commit message(s) in the format 'type(scope): subject', numbered if more than one."
         ));
 
         prompt
@@ -180,7 +181,8 @@ mod tests {
         let prompt = generator.build_prompt(diff, branch_name, count, instructions, &[]);
 
         // Check that all required components are in the prompt
-        assert!(prompt.contains("Generate 2 commit message(s)"));
+        assert!(prompt.contains("Generate 2 alternative commit message(s)"));
+        assert!(prompt.contains("Each message should describe the same change"));
         assert!(prompt.contains("Branch name: feature/user-auth"));
         assert!(prompt.contains("Additional context: Focus on security improvements"));
         assert!(prompt.contains("fn new_function() {}"));
@@ -195,10 +197,11 @@ mod tests {
         let prompt = generator.build_prompt("some diff", "main", 1, None, &[]);
 
         // Check prompt structure is correct
-        assert!(prompt.contains("Generate 1 commit message"));
+        assert!(prompt.contains("Generate 1 alternative commit message"));
+        assert!(prompt.contains("Each message should describe the same change"));
         assert!(prompt.contains("Branch name: main"));
         assert!(!prompt.contains("Additional context:"));
-        assert!(prompt.contains("Provide exactly 1 commit message"));
+        assert!(prompt.contains("Provide exactly 1 alternative commit message"));
     }
 
     #[test]
@@ -365,10 +368,12 @@ mod tests {
         assert_eq!(calls.len(), 1);
 
         let prompt = &calls[0];
-        assert!(prompt.contains("Generate 3 commit message(s)"));
+        assert!(prompt.contains("Generate 3 alternative commit message(s)"));
+        assert!(prompt.contains("Each message should describe the same change"));
         assert!(prompt.contains("Branch name: feature/test"));
         assert!(prompt.contains("Additional context: test instructions"));
         assert!(prompt.contains("test diff"));
+        assert!(prompt.contains("Provide exactly 3 alternative commit message(s)"));
     }
 
     #[test]
@@ -495,7 +500,7 @@ mod tests {
         let prompt = generator.build_prompt("diff", "branch", 1, Some(instructions), &[]);
 
         // Verify the exact formatted string that would be created by that line
-        let expected_format = format!("Additional context: {}\n\n", instructions);
+        let expected_format = format!("Additional context: {instructions}\n\n");
         assert!(prompt.contains(&expected_format));
     }
 
